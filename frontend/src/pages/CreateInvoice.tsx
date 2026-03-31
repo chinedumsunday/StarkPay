@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { usePrivy } from "@privy-io/react-auth";
-import { createInvoice, type Token } from "../lib/invoiceStore";
+import { encodeInvoice, type Token } from "../lib/invoiceStore";
 import { connectWithPrivy } from "../lib/starkzap";
 
 type AddressMode = "app" | "external";
@@ -71,14 +71,14 @@ export default function CreateInvoice() {
       return;
     }
 
-    const inv = createInvoice({
+    const encoded = encodeInvoice({
       creatorName: form.creatorName.trim() || "Anonymous",
       creatorAddress: addr,
       description: form.description.trim() || "Invoice",
       amount: form.amount.trim(),
       token: form.token,
     });
-    setInvoice(inv);
+    setInvoice({ id: encoded });
   }
 
   async function copyLink() {

@@ -1,56 +1,74 @@
-// Invoice data model and simple localStorage store
-// In production, replace with a real database (Supabase, PlanetScale, etc.)
+// Invoice data model — invoices are encoded in the URL, not stored server-side.
+// This makes payment links work on any browser/device without a database.
 
 export type Token = "USDC" | "STRK";
 
 export interface Invoice {
   id: string;
-  creatorAddress: string; // Starknet address that will receive funds
+  creatorAddress: string;
   creatorName: string;
   description: string;
-  amount: string; // human readable e.g. "100"
+  amount: string;
   token: Token;
   createdAt: number;
   paid: boolean;
   txHash?: string;
 }
 
-function generateId(): string {
-  return Math.random().toString(36).substring(2, 9);
-}
-
-export function createInvoice(data: Omit<Invoice, "id" | "createdAt" | "paid">): Invoice {
-  const invoice: Invoice = {
-    ...data,
-    id: generateId(),
-    createdAt: Date.now(),
-    paid: false,
+// Encode invoice data as URL-safe base64 so the link is self-contained
+export function encodeInvoice(data: Omit<Invoice, "id" | "createdAt" | "paid">): string {
+  const payload = {
+    a: data.creatorAddress,
+    n: data.creatorName,
+    d: data.description,
+    m: data.amount,
+    t: data.token,
+    ts: Date.now(),
   };
-  const invoices = getAllInvoices();
-  invoices[invoice.id] = invoice;
-  localStorage.setItem("starkpay_invoices", JSON.stringify(invoices));
-  return invoice;
+  const json = JSON.stringify(payload);
+  return btoa(json).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 
-export function getInvoice(id: string): Invoice | null {
-  const invoices = getAllInvoices();
-  return invoices[id] || null;
-}
-
-export function markInvoicePaid(id: string, txHash: string): void {
-  const invoices = getAllInvoices();
-  if (invoices[id]) {
-    invoices[id].paid = true;
-    invoices[id].txHash = txHash;
-    localStorage.setItem("starkpay_invoices", JSON.stringify(invoices));
+// Decode invoice from URL segment — returns null if invalid
+export function decodeInvoice(encoded: string): Invoice | null {
+  try {
+    const base64 = encoded.replace(/-/g, "+").replace(/_/g, "/");
+    const padding = base64.length % 4 === 0 ? "" : "=".repeat(4 - (base64.length % 4));
+    const json = atob(base64 + padding);
+    const p = JSON.parse(json);
+    if (!p.a || !p.n || !p.d || !p.m || !p.t) return null;
+    return {
+      id: encoded,
+      creatorAddress: p.a,
+      creatorName: p.n,
+      description: p.d,
+      amount: p.m,
+      token: p.t as Token,
+      createdAt: p.ts ?? Date.now(),
+      paid: false,
+    };
+  } catch {
+    return null;
   }
 }
 
-function getAllInvoices(): Record<string, Invoice> {
+// Local-only: track paid invoices in this browser so returning visitors see "Already Paid"
+export function markInvoicePaid(id: string, txHash: string): void {
   try {
-    const raw = localStorage.getItem("starkpay_invoices");
-    return raw ? JSON.parse(raw) : {};
+    const raw = localStorage.getItem("starkpay_paid") ?? "{}";
+    const paid = JSON.parse(raw);
+    paid[id] = txHash;
+    localStorage.setItem("starkpay_paid", JSON.stringify(paid));
   } catch {
-    return {};
+    // non-critical
+  }
+}
+
+export function isInvoicePaid(id: string): string | null {
+  try {
+    const raw = localStorage.getItem("starkpay_paid") ?? "{}";
+    return JSON.parse(raw)[id] ?? null;
+  } catch {
+    return null;
   }
 }
