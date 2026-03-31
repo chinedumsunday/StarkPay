@@ -6,7 +6,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
-import { PrivyClient, verifyAccessToken, createPrivyAppJWKS } from "@privy-io/node";
+import { PrivyClient, verifyAccessToken } from "@privy-io/node";
 import "dotenv/config";
 
 const app = express();
@@ -81,14 +81,23 @@ function isValidWalletId(value: string): boolean {
 }
 
 // ── Verify access token and return user_id ────────────────────
-const privyJWKS = createPrivyAppJWKS({ appId: process.env.PRIVY_APP_ID! });
+// Fetch Privy's JWKS once and cache it for the lifetime of the process
+let cachedJWKS: any = null;
+async function getPrivyJWKS() {
+  if (cachedJWKS) return cachedJWKS;
+  const res = await fetch(`https://auth.privy.io/api/v1/apps/${process.env.PRIVY_APP_ID}/jwks.json`);
+  if (!res.ok) throw new Error("Failed to fetch Privy JWKS");
+  cachedJWKS = await res.json();
+  return cachedJWKS;
+}
 
 async function verifyToken(raw: string): Promise<string | null> {
   try {
+    const jwks = await getPrivyJWKS();
     const claims = await verifyAccessToken({
       access_token: raw,
       app_id: process.env.PRIVY_APP_ID!,
-      verification_key: privyJWKS,
+      verification_key: jwks,
     });
     return claims.user_id;
   } catch (e: any) {
