@@ -95,6 +95,46 @@ export default function CreateInvoice() {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  async function shareInvoice() {
+    const text = `Pay ${form.amount} ${form.token} to ${form.creatorName || "me"} via StarkPay (gasless — no wallet needed):\n${paymentLink}`;
+
+    // Try to share QR code as an image file
+    try {
+      const svg = document.getElementById("invoice-qr")?.querySelector("svg");
+      if (svg && navigator.canShare) {
+        const svgData = new XMLSerializer().serializeToString(svg);
+        const canvas = document.createElement("canvas");
+        canvas.width = 200;
+        canvas.height = 200;
+        const ctx = canvas.getContext("2d")!;
+        const img = new Image();
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => { ctx.drawImage(img, 0, 0, 200, 200); resolve(); };
+          img.onerror = reject;
+          img.src = `data:image/svg+xml;base64,${btoa(svgData)}`;
+        });
+        const blob = await new Promise<Blob>((res) => canvas.toBlob((b) => res(b!), "image/png"));
+        const file = new File([blob], "starkpay-invoice.png", { type: "image/png" });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ title: "StarkPay Invoice", text, files: [file] });
+          return;
+        }
+      }
+    } catch {
+      // fall through to link-only share
+    }
+
+    // Fallback: share link only
+    if (navigator.share) {
+      await navigator.share({ title: "StarkPay Invoice", text });
+    } else {
+      // Last resort: copy to clipboard
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }
+
   return (
     <div className="page">
       <header className="page-header">
@@ -291,7 +331,7 @@ export default function CreateInvoice() {
             </button>
           </div>
 
-          <div style={{ display: "flex", justifyContent: "center", margin: "1.5rem 0 0.5rem" }}>
+          <div id="invoice-qr" style={{ display: "flex", justifyContent: "center", margin: "1.5rem 0 0.5rem" }}>
             <div style={{ background: "#fff", padding: "12px", borderRadius: "12px" }}>
               <QRCodeSVG value={paymentLink} size={160} />
             </div>
@@ -326,18 +366,27 @@ export default function CreateInvoice() {
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: "0.75rem" }}>
+          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
             <button
               className="btn btn-primary"
+              style={{ flex: 1, minWidth: "120px" }}
+              onClick={shareInvoice}
+            >
+              Share Invoice
+            </button>
+            <button
+              className="btn btn-ghost"
+              style={{ flex: 1, minWidth: "120px" }}
               onClick={() => {
                 const text = `💸 I've sent you an invoice for ${form.amount} ${form.token} via StarkPay.\n\nPay here (no wallet needed): ${paymentLink}`;
                 window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, "_blank");
               }}
             >
-              Share on Twitter
+              Post on X
             </button>
             <button
               className="btn btn-ghost"
+              style={{ flex: "0 0 auto" }}
               onClick={() => {
                 setInvoice(null);
                 setAppAddress("");
