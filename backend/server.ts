@@ -82,9 +82,9 @@ function isValidWalletId(value: string): boolean {
 }
 
 // ── Verify access token and return user_id ────────────────────
-const PRIVY_JWKS = createRemoteJWKSet(
-  new URL(`https://auth.privy.io/api/v1/apps/${process.env.PRIVY_APP_ID}/jwks.json`)
-);
+const PRIVY_JWKS_URL = `https://auth.privy.io/api/v1/apps/${process.env.PRIVY_APP_ID}/jwks.json`;
+console.log("[boot] JWKS URL:", PRIVY_JWKS_URL);
+const PRIVY_JWKS = createRemoteJWKSet(new URL(PRIVY_JWKS_URL));
 
 async function verifyToken(raw: string): Promise<string | null> {
   try {
@@ -92,10 +92,10 @@ async function verifyToken(raw: string): Promise<string | null> {
       issuer: "privy.io",
       audience: process.env.PRIVY_APP_ID!,
     });
-    // Privy access token sub is the user DID e.g. "did:privy:..."
+    console.log("[auth] verified user:", payload.sub);
     return payload.sub ?? null;
   } catch (e: any) {
-    console.error("[auth] token verification failed:", e?.message ?? e);
+    console.error("[auth] token verification failed:", e?.code, e?.message ?? e);
     return null;
   }
 }
