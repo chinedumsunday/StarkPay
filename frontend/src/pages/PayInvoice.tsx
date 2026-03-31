@@ -5,7 +5,7 @@ import { getInvoice, markInvoicePaid, isInvoicePaid, type Invoice } from "../lib
 import { connectWithPrivy, payInvoice, getBalance } from "../lib/starkzap";
 import type { WalletInterface } from "starkzap";
 
-type Step = "loading" | "not-found" | "already-paid" | "view" | "connecting" | "paying" | "error";
+type Step = "loading" | "not-found" | "already-paid" | "view" | "connecting" | "paying" | "processing" | "error";
 
 export default function PayInvoice() {
   const { invoiceId } = useParams<{ invoiceId: string }>();
@@ -72,7 +72,7 @@ export default function PayInvoice() {
 
   async function handlePay() {
     if (!invoice || !wallet) return;
-    setStep("paying");
+    setStep("processing");
     setError("");
     try {
       const result = await payInvoice(wallet, invoice.creatorAddress, invoice.amount, invoice.token);
@@ -90,7 +90,7 @@ export default function PayInvoice() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
-      setStep("error");
+      setStep("paying");
     }
   }
 
@@ -252,7 +252,7 @@ export default function PayInvoice() {
         {step === "paying" && wallet && (
           <>
             <div className="banner banner-info" style={{ marginBottom: "1rem" }}>
-              ✅ Wallet ready! Confirm your payment of <strong>{invoice!.amount} {invoice!.token}</strong>.
+              Wallet ready — confirm your payment of <strong>{invoice!.amount} {invoice!.token}</strong>.
             </div>
             <button className="btn btn-primary" onClick={handlePay}>
               Pay {invoice!.amount} {invoice!.token} →
@@ -260,10 +260,16 @@ export default function PayInvoice() {
           </>
         )}
 
-        {step === "paying" && !wallet && (
-          <button className="btn btn-primary" disabled>
-            <div className="spinner" /> Processing payment...
-          </button>
+        {step === "processing" && (
+          <>
+            <div className="banner banner-info" style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.6rem" }}>
+              <div className="spinner" style={{ flexShrink: 0, borderTopColor: "var(--accent)", borderColor: "rgba(255,255,255,0.2)", width: 16, height: 16, borderWidth: 2 }} />
+              Submitting transaction on Starknet — this takes a few seconds...
+            </div>
+            <button className="btn btn-primary" disabled>
+              <div className="spinner" /> Processing...
+            </button>
+          </>
         )}
 
         <p style={{ textAlign: "center", marginTop: "1rem", fontSize: "0.72rem", color: "var(--text-muted)" }}>
