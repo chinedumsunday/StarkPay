@@ -18,11 +18,22 @@ app.use(helmet({
 }));
 
 // ── CORS ──────────────────────────────────────────────────────
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://stark-pay-beta.vercel.app",
+  ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
+];
+
 app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    process.env.FRONTEND_URL || "https://your-starkpay-app.vercel.app",
-  ],
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g. curl, Postman) and all allowed origins
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS: origin ${origin} not allowed`));
+    }
+  },
+  credentials: true,
 }));
 
 // ── Body parsing with size limit ─────────────────────────────
