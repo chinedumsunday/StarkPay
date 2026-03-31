@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { usePrivy } from "@privy-io/react-auth";
-import { decodeInvoice, markInvoicePaid, isInvoicePaid, type Invoice } from "../lib/invoiceStore";
+import { getInvoice, markInvoicePaid, isInvoicePaid, type Invoice } from "../lib/invoiceStore";
 import { connectWithPrivy, payInvoice, getBalance } from "../lib/starkzap";
 import type { WalletInterface } from "starkzap";
 
@@ -26,14 +26,15 @@ export default function PayInvoice() {
     setTimeout(() => setAddressCopied(false), 2000);
   }
 
-  // Load invoice — decoded entirely from the URL, works on any browser
+  // Load invoice from backend by short ID
   useEffect(() => {
     if (!invoiceId) { setStep("not-found"); return; }
-    const inv = decodeInvoice(invoiceId);
-    if (!inv) { setStep("not-found"); return; }
     if (isInvoicePaid(invoiceId)) { setStep("already-paid"); return; }
-    setInvoice(inv);
-    setStep("view");
+    getInvoice(invoiceId).then((inv) => {
+      if (!inv) { setStep("not-found"); return; }
+      setInvoice(inv);
+      setStep("view");
+    });
   }, [invoiceId]);
 
   // If user just authenticated, auto-connect wallet

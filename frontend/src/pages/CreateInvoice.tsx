@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { usePrivy } from "@privy-io/react-auth";
-import { encodeInvoice, type Token } from "../lib/invoiceStore";
+import { createInvoice, type Token } from "../lib/invoiceStore";
+import { QRCodeSVG } from "qrcode.react";
 import { connectWithPrivy } from "../lib/starkzap";
 
 type AddressMode = "app" | "external";
@@ -58,7 +59,7 @@ export default function CreateInvoice() {
     }
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const addr = resolvedAddress.trim();
 
@@ -71,14 +72,21 @@ export default function CreateInvoice() {
       return;
     }
 
-    const encoded = encodeInvoice({
-      creatorName: form.creatorName.trim() || "Anonymous",
-      creatorAddress: addr,
-      description: form.description.trim() || "Invoice",
-      amount: form.amount.trim(),
-      token: form.token,
-    });
-    setInvoice({ id: encoded });
+    setLoadingWallet(true);
+    try {
+      const id = await createInvoice({
+        creatorName: form.creatorName.trim() || "Anonymous",
+        creatorAddress: addr,
+        description: form.description.trim() || "Invoice",
+        amount: form.amount.trim(),
+        token: form.token,
+      });
+      setInvoice({ id });
+    } catch {
+      setError("Failed to create invoice. Please try again.");
+    } finally {
+      setLoadingWallet(false);
+    }
   }
 
   async function copyLink() {
@@ -282,6 +290,15 @@ export default function CreateInvoice() {
               {copied ? "✓ Copied" : "Copy"}
             </button>
           </div>
+
+          <div style={{ display: "flex", justifyContent: "center", margin: "1.5rem 0 0.5rem" }}>
+            <div style={{ background: "#fff", padding: "12px", borderRadius: "12px" }}>
+              <QRCodeSVG value={paymentLink} size={160} />
+            </div>
+          </div>
+          <p style={{ textAlign: "center", fontSize: "0.72rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
+            Scan to pay
+          </p>
 
           <hr className="divider" />
 

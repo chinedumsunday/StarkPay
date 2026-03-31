@@ -196,6 +196,43 @@ app.post("/api/wallet/sign", signLimiter, async (req, res) => {
   }
 });
 
+// ── Invoice store (in-memory, short IDs) ─────────────────────
+interface InvoiceData {
+  creatorAddress: string;
+  creatorName: string;
+  description: string;
+  amount: string;
+  token: string;
+  createdAt: number;
+}
+const invoiceStore = new Map<string, InvoiceData>();
+
+function generateShortId(): string {
+  return Math.random().toString(36).substring(2, 9);
+}
+
+app.post("/api/invoice", (req, res) => {
+  const { creatorAddress, creatorName, description, amount, token } = req.body;
+  if (!creatorAddress || !creatorName || !description || !amount || !token) {
+    return res.status(400).json({ error: "Missing required invoice fields" });
+  }
+  if (!creatorAddress.startsWith("0x") || creatorAddress.length < 10) {
+    return res.status(400).json({ error: "Invalid Starknet address" });
+  }
+  if (isNaN(Number(amount)) || Number(amount) <= 0) {
+    return res.status(400).json({ error: "Invalid amount" });
+  }
+  const id = generateShortId();
+  invoiceStore.set(id, { creatorAddress, creatorName, description, amount, token, createdAt: Date.now() });
+  res.json({ id });
+});
+
+app.get("/api/invoice/:id", (req, res) => {
+  const invoice = invoiceStore.get(req.params.id);
+  if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+  res.json(invoice);
+});
+
 // ── AVNU Paymaster proxy ──────────────────────────────────────
 const AVNU_URL =
   process.env.AVNU_PAYMASTER_URL || "https://sepolia.paymaster.avnu.fi";

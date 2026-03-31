@@ -1,6 +1,3 @@
-// Invoice data model — invoices are encoded in the URL, not stored server-side.
-// This makes payment links work on any browser/device without a database.
-
 export type Token = "USDC" | "STRK";
 
 export interface Invoice {
@@ -15,44 +12,35 @@ export interface Invoice {
   txHash?: string;
 }
 
-// Encode invoice data as URL-safe base64 so the link is self-contained
-export function encodeInvoice(data: Omit<Invoice, "id" | "createdAt" | "paid">): string {
-  const payload = {
-    a: data.creatorAddress,
-    n: data.creatorName,
-    d: data.description,
-    m: data.amount,
-    t: data.token,
-    ts: Date.now(),
-  };
-  const json = JSON.stringify(payload);
-  return btoa(json).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+const SERVER_URL = import.meta.env.VITE_PRIVY_SERVER_URL || "http://localhost:3001";
+
+// Create invoice on backend — returns a short 7-char ID
+export async function createInvoice(
+  data: Omit<Invoice, "id" | "createdAt" | "paid">
+): Promise<string> {
+  const res = await fetch(`${SERVER_URL}/api/invoice`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to create invoice");
+  const { id } = await res.json();
+  return id;
 }
 
-// Decode invoice from URL segment — returns null if invalid
-export function decodeInvoice(encoded: string): Invoice | null {
+// Fetch invoice from backend by short ID
+export async function getInvoice(id: string): Promise<Invoice | null> {
   try {
-    const base64 = encoded.replace(/-/g, "+").replace(/_/g, "/");
-    const padding = base64.length % 4 === 0 ? "" : "=".repeat(4 - (base64.length % 4));
-    const json = atob(base64 + padding);
-    const p = JSON.parse(json);
-    if (!p.a || !p.n || !p.d || !p.m || !p.t) return null;
-    return {
-      id: encoded,
-      creatorAddress: p.a,
-      creatorName: p.n,
-      description: p.d,
-      amount: p.m,
-      token: p.t as Token,
-      createdAt: p.ts ?? Date.now(),
-      paid: false,
-    };
+    const res = await fetch(`${SERVER_URL}/api/invoice/${id}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return { ...data, id, paid: false };
   } catch {
     return null;
   }
 }
 
-// Local-only: track paid invoices in this browser so returning visitors see "Already Paid"
+// Local-only: track paid invoices in this browser
 export function markInvoicePaid(id: string, txHash: string): void {
   try {
     const raw = localStorage.getItem("starkpay_paid") ?? "{}";
