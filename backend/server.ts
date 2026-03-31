@@ -6,7 +6,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
-import { PrivyClient } from "@privy-io/node";
+import { PrivyClient, verifyAccessToken, createPrivyAppJWKS } from "@privy-io/node";
 import "dotenv/config";
 
 const app = express();
@@ -81,11 +81,18 @@ function isValidWalletId(value: string): boolean {
 }
 
 // ── Verify access token and return user_id ────────────────────
+const privyJWKS = createPrivyAppJWKS({ appId: process.env.PRIVY_APP_ID! });
+
 async function verifyToken(raw: string): Promise<string | null> {
   try {
-    const claims = await privy.utils().auth().verifyAccessToken(raw);
+    const claims = await verifyAccessToken({
+      access_token: raw,
+      app_id: process.env.PRIVY_APP_ID!,
+      verification_key: privyJWKS,
+    });
     return claims.user_id;
-  } catch {
+  } catch (e: any) {
+    console.error("[auth] token verification failed:", e?.message ?? e);
     return null;
   }
 }
